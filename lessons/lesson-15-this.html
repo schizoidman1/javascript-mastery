@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 15 — this · JS Mastery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;750&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/design-system.css">
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== HERO ===== -->
+  <header class="hero">
+    <span class="eyebrow">◆ Lesson 15 · The Call Site</span>
+    <h1>Understanding <code class="inline" style="font-size:.85em">this</code></h1>
+    <p class="lead">By the end of this lesson you won't <em>memorize</em> <code class="inline">this</code>.
+    You'll <strong>derive</strong> it — the same way we derived closures.</p>
+
+    <div class="progress" aria-label="roadmap">
+      <span class="dot done">Variables</span>
+      <span class="dot done">Operators</span>
+      <span class="dot done">Truthy/Falsy</span>
+      <span class="dot done">&&  ||  ??</span>
+      <span class="dot done">Optional chaining</span>
+      <span class="dot done">Objects &amp; refs</span>
+      <span class="dot done">Hoisting</span>
+      <span class="dot done">Execution Contexts</span>
+      <span class="dot done">Call Stack</span>
+      <span class="dot done">Lexical Env</span>
+      <span class="dot done">Scope</span>
+      <span class="dot done">Closures</span>
+      <span class="dot now">this ← you are here</span>
+    </div>
+  </header>
+
+  <!-- ===== 1. THE MYTH ===== -->
+  <h2><span class="n">1</span>First, delete a lie</h2>
+  <p>Almost every beginner is taught one sentence:</p>
+
+  <div class="callout myth">
+    <span class="tag">✕ The Myth</span>
+    <p style="color:var(--text);font-size:1.05rem;margin:0">“<code class="inline">this</code> refers to the current object.”</p>
+  </div>
+
+  <p>Sometimes that's true. Sometimes it's <strong>completely false</strong>. A rule that's only sometimes
+  right is worse than no rule — so throw it away. We're going to build the real one from the engine up.</p>
+
+  <!-- ===== 2. THE QUESTION ===== -->
+  <h2><span class="n">2</span>Where does <code class="inline" style="font-size:.85em">this</code> even come from?</h2>
+
+  <pre class="code"><span class="cap">setup</span><code><span class="k">const</span> naruto = {
+  <span class="pr">name</span>: <span class="s">"Naruto"</span>,
+  <span class="fn">speak</span>() {
+    console.<span class="fn">log</span>(<span class="th">this</span>.<span class="pr">name</span>);
+  }
+};
+
+naruto.<span class="fn">speak</span>();</code></pre>
+
+  <p>We never wrote <code class="inline">let this = ...</code>. It was never declared. So where did it appear from?
+  Let's compare it to something you already fully understand — a normal variable.</p>
+
+  <div class="diagram">
+    <div class="title">How the engine finds a normal variable — scope chain lookup</div>
+    <div class="flex">
+      <div class="box"><div class="box-h">Function A env</div><div class="slot"><span>village</span><span class="val dim">✕ not here</span></div></div>
+      <div class="arrow">→</div>
+      <div class="box"><div class="box-h">Outer env</div><div class="slot"><span>village</span><span class="val dim">✕ not here</span></div></div>
+      <div class="arrow">→</div>
+      <div class="box"><div class="box-h">Global env</div><div class="slot"><span>village</span><span class="val" style="color:var(--green)">✓ "Leaf"</span></div></div>
+    </div>
+  </div>
+
+  <div class="callout key">
+    <span class="tag">◆ The key fact</span>
+    <p><code class="inline">this</code> does <strong>not</strong> go through that chain. It is <strong>not a variable</strong>.
+    The engine never searches the lexical environment for it. This single fact explains every confusing
+    <code class="inline">this</code> you'll ever meet.</p>
+  </div>
+
+  <!-- ===== 3. LIVES IN THE EXECUTION CONTEXT ===== -->
+  <h2><span class="n">3</span><code class="inline" style="font-size:.85em">this</code> is born with the Execution Context</h2>
+
+  <p>Remember: every time a function <em>runs</em>, the engine spins up an <strong>Execution Context</strong>.
+  <code class="inline">this</code> is a <em>slot inside that context</em> — not inside the lexical environment.</p>
+
+  <div class="diagram">
+    <div class="title">One execution context, created fresh on every call</div>
+    <div class="box ctx" style="max-width:340px;margin:0 auto">
+      <div class="box-h">Execution Context</div>
+      <div class="slot"><span>Lexical Environment</span><span class="val dim">variables…</span></div>
+      <div class="slot"><span>Variable Environment</span><span class="val dim">var…</span></div>
+      <div class="slot" style="background:rgba(255,157,92,.08);margin:0 -16px;padding:6px 16px"><span class="th">this</span><span class="val bind">← set at call time</span></div>
+      <div class="slot"><span>Return address</span><span class="val dim">…</span></div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="tag">The consequence</span>
+    <p>Because the context is created <strong>every time the function is called</strong>, <code class="inline">this</code>
+    is decided <strong>at call time</strong> — not when the function was written. Variables are the opposite:
+    fixed at creation. That difference <em>is</em> the whole lesson.</p>
+  </div>
+
+  <!-- ===== 4. LIVE SIMULATOR ===== -->
+  <h2><span class="n">4</span>Live: watch the call site decide</h2>
+  <p>Same function object every time. Press a call and watch what the engine writes into the
+  <span class="th">this</span> slot. Ask yourself the only question that matters: <strong>how was it called?</strong></p>
+
+  <div class="diagram" id="sim">
+    <div class="title">Call-Site Simulator</div>
+    <div class="flex" style="align-items:stretch">
+      <div style="flex:1 1 260px">
+        <div class="dim" style="font-family:var(--font-mono);font-size:.8rem;margin-bottom:8px">Choose a call:</div>
+        <div style="display:grid;gap:8px">
+          <button class="opt" data-call="naruto">naruto.speak()</button>
+          <button class="opt" data-call="sasuke">sasuke.speak()</button>
+          <button class="opt" data-call="bare">const fn = naruto.speak; fn()</button>
+        </div>
+      </div>
+      <div style="flex:1 1 260px">
+        <div class="box ctx" style="min-height:150px">
+          <div class="box-h">Execution Context created</div>
+          <div class="slot"><span class="th">this</span><span class="val" id="thisVal">— press a call —</span></div>
+          <div class="slot"><span>this.name</span><span class="val" id="nameVal">—</span></div>
+          <div style="margin-top:12px;font-family:var(--font-mono);font-size:.8rem;color:var(--text-mute)">console output:</div>
+          <div id="output" style="font-family:var(--font-mono);font-size:1rem;color:var(--green);min-height:1.4em">&nbsp;</div>
+        </div>
+      </div>
+    </div>
+    <p id="simNote" class="dim" style="font-family:var(--font-mono);font-size:.82rem;margin:14px 0 0;min-height:2.4em"></p>
+  </div>
+
+  <!-- ===== 5. THE BREAK ===== -->
+  <h2><span class="n">5</span>The moment intuition breaks</h2>
+  <pre class="code"><span class="cap">predict before running</span><code><span class="k">const</span> fn = naruto.<span class="pr">speak</span>;   <span class="c">// just grab the function</span>
+<span class="hl">fn();                       <span class="c">// how was this called?</span></span></code></pre>
+
+  <p>Most people say <code class="inline">"Naruto"</code> — because the function <em>belongs</em> to Naruto.
+  But functions don't care where they're stored (you learned that with closures). And <code class="inline">this</code>
+  doesn't care where the function was <em>created</em>. It asks one thing:</p>
+
+  <div class="callout key" style="text-align:center">
+    <span class="tag">The only question</span>
+    <p style="font-size:1.3rem;color:var(--text);margin:.2em 0"><strong>“Who called me?”</strong></p>
+    <p style="margin:0">Not who owns me. Not who created me. <strong>The caller.</strong></p>
+  </div>
+
+  <p>Here <code class="inline">fn()</code> was called as a <strong>plain function</strong> — no
+  <code class="inline">object.</code> in front. There's no owner at the call site, so <code class="inline">this</code>
+  becomes <code class="inline">undefined</code> (strict mode) — reading <code class="inline">.name</code> off it throws.
+  We finish that thread in §8.</p>
+
+  <!-- ===== 6. CLOSURES VS THIS ===== -->
+  <h2><span class="n">6</span>Closures vs <code class="inline" style="font-size:.85em">this</code> — the master table</h2>
+  <p>Print this into your brain. It resolves 90% of all confusion:</p>
+
+  <table class="cmp">
+    <thead><tr><th>Closures</th><th><code class="inline">this</code></th></tr></thead>
+    <tbody>
+      <tr><td>Decided when the function is <strong>created</strong></td><td>Decided when the function is <strong>called</strong></td></tr>
+      <tr><td>Uses the <strong>lexical environment</strong></td><td>Uses the <strong>call site</strong></td></tr>
+      <tr><td>Never changes</td><td>Can change on <strong>every call</strong></td></tr>
+      <tr><td>“I remember where I was born.”</td><td>“I don't care where I was born.”</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ===== 7. SAME FUNCTION, DIFFERENT THIS ===== -->
+  <h2><span class="n">7</span>Same function object, two different <code class="inline" style="font-size:.85em">this</code></h2>
+  <pre class="code"><code><span class="k">const</span> naruto = { <span class="pr">name</span>: <span class="s">"Naruto"</span>, <span class="fn">speak</span>() { console.<span class="fn">log</span>(<span class="th">this</span>.<span class="pr">name</span>); } };
+<span class="k">const</span> sasuke = { <span class="pr">name</span>: <span class="s">"Sasuke"</span> };
+
+sasuke.<span class="pr">speak</span> = naruto.<span class="pr">speak</span>;   <span class="c">// SAME function object — like a reference copy</span>
+
+naruto.<span class="fn">speak</span>();   <span class="c">// ?</span>
+sasuke.<span class="fn">speak</span>();   <span class="c">// ?</span></code></pre>
+
+  <div class="diagram">
+    <div class="title">Memory — both names point to one function object (§6 of the Objects lesson)</div>
+    <div class="flex">
+      <div class="box obj"><div class="box-h">naruto.speak</div><div class="slot"><span>→</span><span class="val" style="color:var(--accent)">Fn #901</span></div></div>
+      <div class="box obj"><div class="box-h">sasuke.speak</div><div class="slot"><span>→</span><span class="val" style="color:var(--accent)">Fn #901</span></div></div>
+      <div class="box"><div class="box-h">Function #901</div><div class="slot dim">log(this.name)</div></div>
+    </div>
+    <p class="dim" style="font-family:var(--font-mono);font-size:.82rem;margin:14px 0 0">
+      One function. Two call sites. <span class="th">naruto.speak()</span> → this = naruto → "Naruto".
+      <span class="th">sasuke.speak()</span> → this = sasuke → "Sasuke". The <em>dot's left-hand side</em> becomes <code class="inline">this</code>.</p>
+  </div>
+
+  <!-- ===== 8. STRICT MODE ===== -->
+  <h2><span class="n">8</span>The last piece: <code class="inline" style="font-size:.85em">fn()</code> alone</h2>
+  <p>When a function is called with <strong>nothing to the left of a dot</strong>, there's no caller-object.
+  What fills the <span class="th">this</span> slot then depends on strict mode:</p>
+
+  <div class="flex" style="align-items:stretch">
+    <div class="card" style="margin:8px 0">
+      <div class="box-h" style="color:var(--green);font-family:var(--font-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Strict mode ("use strict", modules, classes)</div>
+      <p style="margin:0"><code class="inline">this</code> → <code class="inline">undefined</code>.<br>
+      Reading <code class="inline">.name</code> off it <strong style="color:var(--red)">throws a TypeError</strong>. Honest and loud.</p>
+    </div>
+    <div class="card" style="margin:8px 0">
+      <div class="box-h" style="color:var(--amber);font-family:var(--font-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Sloppy mode (old scripts)</div>
+      <p style="margin:0"><code class="inline">this</code> → the <strong>global object</strong>
+      (<code class="inline">window</code> in browsers). Silent, surprising bugs.</p>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <span class="tag">✓ Rule of thumb</span>
+    <p>Modern code (ES modules, <code class="inline">class</code> bodies) is <strong>always strict</strong>.
+    Assume a lone <code class="inline">fn()</code> gives <code class="inline">this === undefined</code>. If a bare call
+    seems to “work,” you're probably in a sloppy old script.</p>
+  </div>
+
+  <!-- ===== 9. CHALLENGES ===== -->
+  <h2><span class="n">9</span>Your challenges — reason, don't run</h2>
+  <p>Reason like the engine. Answer, then reveal.</p>
+
+  <!-- Q1 -->
+  <div class="quiz" data-quiz>
+    <span class="q-num">Challenge 1</span>
+    <pre class="code" style="margin-top:10px"><code>naruto.<span class="fn">speak</span>();  <span class="c">// speak logs this.name</span></code></pre>
+    <p style="margin:.4em 0 0">What prints, and what is <code class="inline">this</code>?</p>
+    <div class="opts">
+      <button class="opt" data-correct>"Naruto" — this = the naruto object</button>
+      <button class="opt">undefined — this is empty</button>
+      <button class="opt">TypeError</button>
+    </div>
+    <div class="explain"><strong>Called as <code class="inline">object.method()</code>.</strong> The engine sees the dot,
+    puts the left-hand object (<code class="inline">naruto</code>) in the <span class="th">this</span> slot.
+    <code class="inline">this.name</code> → <code class="inline">"Naruto"</code>.</div>
+  </div>
+
+  <!-- Q2 -->
+  <div class="quiz" data-quiz>
+    <span class="q-num">Challenge 2</span>
+    <pre class="code" style="margin-top:10px"><code><span class="k">const</span> fn = naruto.<span class="pr">speak</span>;
+fn();</code></pre>
+    <p style="margin:.4em 0 0">What is <code class="inline">this</code> here?</p>
+    <div class="opts">
+      <button class="opt">the naruto object — it still belongs to Naruto</button>
+      <button class="opt" data-correct>undefined (strict) → then TypeError on .name</button>
+      <button class="opt">the fn variable</button>
+    </div>
+    <div class="explain"><strong>Called as a plain <code class="inline">fn()</code></strong> — no dot, no owner.
+    In strict mode <code class="inline">this = undefined</code>, so <code class="inline">undefined.name</code> throws.
+    Storage doesn't matter; the <em>call site</em> does.</div>
+  </div>
+
+  <!-- Q3 -->
+  <div class="quiz" data-quiz>
+    <span class="q-num">Challenge 3</span>
+    <pre class="code" style="margin-top:10px"><code><span class="k">const</span> sasuke = { <span class="pr">name</span>: <span class="s">"Sasuke"</span>, <span class="pr">speak</span>: naruto.<span class="pr">speak</span> };
+sasuke.<span class="fn">speak</span>();</code></pre>
+    <p style="margin:.4em 0 0">What prints?</p>
+    <div class="opts">
+      <button class="opt">"Naruto" — the function was written inside naruto</button>
+      <button class="opt" data-correct>"Sasuke" — called as sasuke.speak()</button>
+      <button class="opt">undefined</button>
+    </div>
+    <div class="explain">Same function object, but the call site is <code class="inline">sasuke.speak()</code>.
+    Left of the dot = <code class="inline">sasuke</code> → <span class="th">this = sasuke</span> → <code class="inline">"Sasuke"</code>.
+    Where it was <em>defined</em> is irrelevant.</div>
+  </div>
+
+  <!-- Q4 -->
+  <div class="quiz" data-quiz>
+    <span class="q-num">Challenge 4 · the intermediate filter</span>
+    <pre class="code" style="margin-top:10px"><code><span class="fn">speak</span>() { <span class="k">return</span> <span class="th">this</span>; }
+<span class="c">// naruto.speak and sasuke.speak point to this same fn</span>
+console.<span class="fn">log</span>( naruto.<span class="fn">speak</span>() === sasuke.<span class="fn">speak</span>() );</code></pre>
+    <p style="margin:.4em 0 0"><code class="inline">true</code> or <code class="inline">false</code>?</p>
+    <div class="opts">
+      <button class="opt">true — same function returns the same thing</button>
+      <button class="opt" data-correct>false — each returns a different object</button>
+    </div>
+    <div class="explain"><code class="inline">naruto.speak()</code> returns the <strong>naruto</strong> object;
+    <code class="inline">sasuke.speak()</code> returns the <strong>sasuke</strong> object. Two different objects →
+    <code class="inline">naruto === sasuke</code> is <strong>false</strong>. The function is identical; the <code class="inline">this</code>
+    each call returns is not. That's the whole lesson in one line. 🔥</div>
+  </div>
+
+  <!-- ===== TAKEAWAYS ===== -->
+  <h2><span class="n">✦</span>What to carry forward</h2>
+  <div class="card">
+    <ul class="clean">
+      <li><code class="inline">this</code> is <strong>not a variable</strong> — it's a slot in the execution context.</li>
+      <li>It's set at <strong>call time</strong>, freshly, on every single call.</li>
+      <li>The rule is the <strong>call site</strong>, not the definition: <em>“who called me?”</em></li>
+      <li><code class="inline">obj.method()</code> → <code class="inline">this</code> = <code class="inline">obj</code> (left of the dot).</li>
+      <li><code class="inline">fn()</code> alone → <code class="inline">this</code> = <code class="inline">undefined</code> in strict mode.</li>
+    </ul>
+  </div>
+
+  <details class="reveal">
+    <summary>Coming in Lesson 16 — bending <code class="inline">this</code> on purpose</summary>
+    <div class="body">
+      <p>Now that you know <code class="inline">this</code> follows the call site, the natural next question is:
+      <em>can I override it?</em> Yes — with <code class="inline">call</code>, <code class="inline">apply</code>,
+      <code class="inline">bind</code>, and then the big twist: <strong>arrow functions</strong>, which throw the
+      whole call-site rule out and capture <code class="inline">this</code> lexically (like a closure).
+      That contrast will lock this lesson in permanently.</p>
+    </div>
+  </details>
+
+  <div class="footer">
+    <strong>Lesson 15 complete.</strong> Answer the four challenges out loud before you move on — if you can
+    <em>explain</em> Challenge 4, you're past the beginner wall. Say <span class="kbd">next</span> when ready for
+    arrow functions &amp; <code class="inline">call/apply/bind</code>.
+  </div>
+
+</div>
+
+<script>
+/* ---- Call-site simulator ---- */
+const data = {
+  naruto: { this:'naruto object', name:'"Naruto"', out:'Naruto', ok:true,
+    note:'Called as naruto.speak() → the engine reads the LEFT of the dot and drops it into the this slot.' },
+  sasuke: { this:'sasuke object', name:'"Sasuke"', out:'Sasuke', ok:true,
+    note:'Same function #901, but the call site is sasuke.speak() → this = sasuke. Definition is irrelevant.' },
+  bare:   { this:'undefined', name:'✕ cannot read .name', out:'TypeError!', ok:false,
+    note:'fn() has nothing left of a dot → no caller-object → strict mode sets this = undefined → .name throws.' }
+};
+document.querySelectorAll('#sim .opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#sim .opt').forEach(b => b.classList.remove('correct','wrong'));
+    const d = data[btn.dataset.call];
+    btn.classList.add(d.ok ? 'correct' : 'wrong');
+    const tv = document.getElementById('thisVal');
+    tv.textContent = d.this;
+    tv.style.color = d.ok ? 'var(--syn-this)' : 'var(--red)';
+    document.getElementById('nameVal').textContent = d.name;
+    const o = document.getElementById('output');
+    o.textContent = d.out;
+    o.style.color = d.ok ? 'var(--green)' : 'var(--red)';
+    o.classList.remove('fade-in'); void o.offsetWidth; o.classList.add('fade-in');
+    document.getElementById('simNote').textContent = d.note;
+  });
+});
+
+/* ---- Quizzes ---- */
+document.querySelectorAll('[data-quiz]').forEach(quiz => {
+  const explain = quiz.querySelector('.explain');
+  quiz.querySelectorAll('.opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      quiz.querySelectorAll('.opt').forEach(o => { o.classList.remove('correct','wrong'); o.disabled = true; });
+      if (opt.hasAttribute('data-correct')) opt.classList.add('correct');
+      else {
+        opt.classList.add('wrong');
+        quiz.querySelector('[data-correct]').classList.add('correct');
+      }
+      explain.classList.add('show');
+    });
+  });
+});
+</script>
+</body>
+</html>

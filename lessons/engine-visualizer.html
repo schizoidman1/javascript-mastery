@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engine Visualizer · JS Mastery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;750&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/design-system.css">
+<style>
+  .wrap.wide { max-width: 1180px; }
+
+  .stage { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 18px 0; }
+  @media (max-width: 900px) { .stage { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+  .panel > .head {
+    font-family: var(--font-mono); font-size: .74rem; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--text-mute);
+    padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg-soft);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .panel > .body { padding: 14px 16px; }
+
+  .codebox { font-family: var(--font-mono); font-size: .86rem; line-height: 1.9; }
+  .cline { display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding: 0 12px;
+           border-left: 2px solid transparent; white-space: pre; transition: background .2s, border-color .2s; }
+  .cline .ln { color: var(--text-mute); text-align: right; user-select: none; }
+  .cline.active { background: rgba(255,157,92,.10); border-left-color: var(--syn-this); }
+
+  .stack { display: flex; flex-direction: column-reverse; gap: 8px; min-height: 40px; }
+  .frame { border: 1px solid var(--border-hi); border-radius: 10px; background: var(--panel-2); overflow: hidden; animation: fade .35s ease both; }
+  .frame.active { border-color: var(--purple); box-shadow: 0 0 0 1px rgba(192,140,255,.35); }
+  .frame .fhead { display:flex; justify-content:space-between; align-items:center; padding: 8px 12px;
+                  font-family: var(--font-mono); font-size: .8rem; background: rgba(192,140,255,.06); border-bottom: 1px solid var(--border); }
+  .frame.active .fhead { background: rgba(192,140,255,.14); }
+  .frame .fname { font-weight: 700; color: var(--text); }
+  .frame .ftag { font-size: .66rem; color: var(--text-mute); text-transform: uppercase; letter-spacing:.05em; }
+  .frame .fbody { padding: 10px 12px; }
+
+  .subhead { font-family: var(--font-mono); font-size: .68rem; letter-spacing:.06em; text-transform: uppercase; color: var(--accent-2); margin: 8px 0 4px; }
+
+  .thisrow { display:flex; justify-content:space-between; gap:10px; align-items:center; padding: 6px 10px; margin: 6px 0 2px;
+             border-radius: 8px; background: rgba(255,157,92,.08); border: 1px dashed rgba(255,157,92,.4); font-family: var(--font-mono); font-size:.8rem; }
+  .thisrow .k { color: var(--syn-this); font-weight:700; }
+  .thisrow .v { color: var(--text); }
+
+  .var { display:flex; justify-content:space-between; gap:10px; padding:5px 8px; border-radius:7px; margin:3px 0; font-family:var(--font-mono); font-size:.8rem; }
+  .var .vn { color: var(--text); }
+  .var.tdz  { background: rgba(255,202,107,.08); }
+  .var.tdz .vv  { color: var(--amber); font-style: italic; }
+  .var.set  { background: rgba(91,229,132,.07); }
+  .var.set .vv  { color: var(--green); }
+  .var.hit  { outline: 2px solid rgba(91,229,132,.75); box-shadow: 0 0 0 3px rgba(91,229,132,.15); }
+  .var.bump .vv { animation: bump .5s ease; }
+  @keyframes bump { 0%{ transform:scale(1) } 40%{ transform:scale(1.25); color:var(--amber) } 100%{ transform:scale(1) } }
+
+  .outer { font-family:var(--font-mono); font-size:.74rem; color: var(--text-mute); margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); }
+  .outer b { color: var(--accent); }
+  .outer.closure b { color: var(--accent-2); }
+
+  /* HEAP */
+  .heapwrap { margin-top:14px; }
+  .heaphead { font-family:var(--font-mono); font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-2);
+              display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .heaphead::before { content:""; flex:1; height:1px; background: repeating-linear-gradient(90deg, var(--border) 0 6px, transparent 6px 12px); }
+  .heaphead::after  { content:""; flex:1; height:1px; background: repeating-linear-gradient(90deg, var(--border) 0 6px, transparent 6px 12px); }
+  .henv { border:1px solid rgba(87,224,196,.45); border-radius:10px; background: rgba(87,224,196,.05); overflow:hidden; animation: fade .4s ease both; }
+  .henv .hh { padding:8px 12px; font-family:var(--font-mono); font-size:.78rem; background: rgba(87,224,196,.10);
+              border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .henv .hh .nm { color: var(--accent-2); font-weight:700; }
+  .henv .hbody { padding:10px 12px; }
+  .keptby { font-family:var(--font-mono); font-size:.72rem; color:var(--text-mute); margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); }
+  .keptby b { color: var(--accent-2); }
+
+  .console { background:#08090d; border-radius:0 0 var(--r) var(--r); min-height:52px; padding:12px 16px; font-family:var(--font-mono); font-size:.86rem; }
+  .console .line { color: var(--green); animation: fade .3s ease both; }
+  .console .empty { color: var(--text-mute); }
+
+  .lookup { margin-top:12px; padding:10px 12px; border-radius:10px; background: var(--bg-soft); border:1px solid var(--border); font-family:var(--font-mono); font-size:.78rem; }
+  .lookup .q { color: var(--accent-2); font-weight:700; margin-bottom:4px; }
+  .lookup .step { display:flex; justify-content:space-between; padding:3px 0; }
+  .lookup .ok { color: var(--green); } .lookup .no { color: var(--red); }
+
+  .controls { position: sticky; bottom: 0; z-index: 5; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+              background: linear-gradient(transparent, var(--bg) 30%); padding: 16px 0 6px; margin-top: 8px; }
+  .track { flex: 1 1 160px; height:6px; background: var(--panel-2); border-radius:999px; overflow:hidden; border:1px solid var(--border); }
+  .track .fill { height:100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); width:0%; transition: width .25s ease; }
+  .stepnum { font-family:var(--font-mono); font-size:.8rem; color:var(--text-mute); min-width:56px; }
+  .btn[disabled] { opacity:.35; cursor:not-allowed; }
+
+  .narbr { background: var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent);
+           border-radius: 0 var(--r) var(--r) 0; padding: 14px 18px; margin: 14px 0; min-height: 3.2em; }
+  .narbr .phase { font-family:var(--font-mono); font-size:.7rem; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); display:block; margin-bottom:4px; }
+  .narbr p { margin:0; color: var(--text); }
+
+  /* snippet selector */
+  .picker { display:flex; gap:8px; flex-wrap:wrap; margin: 6px 0 4px; }
+  .snip { font-family:var(--font-mono); font-size:.82rem; padding:9px 16px; border-radius:10px; cursor:pointer;
+          background: var(--panel); border:1px solid var(--border); color:var(--text-dim); transition:all .12s; }
+  .snip:hover { border-color: var(--border-hi); color: var(--text); }
+  .snip.on { background: var(--accent); border-color: var(--accent); color:#0b0e14; font-weight:700; }
+  .snip .sub { display:block; font-size:.66rem; opacity:.8; text-transform:uppercase; letter-spacing:.05em; }
+</style>
+</head>
+<body>
+<div class="wrap wide">
+
+  <header class="hero" style="padding-bottom:8px">
+    <span class="eyebrow">◆ Interactive Lab · The Engine, One Step at a Time</span>
+    <h1>Engine Visualizer</h1>
+    <p class="lead">Step through real code and <strong>watch the machine work</strong>: contexts pushed/popped on
+    the call stack, each Lexical Environment filling up, <span class="th">this</span> bound at call time, the scope
+    chain walking outward — and, for closures, an environment that <strong>survives on the heap</strong> after its frame is gone.</p>
+
+    <div class="picker" id="picker"></div>
+    <p class="dim" style="font-family:var(--font-mono);font-size:.82rem;margin-top:10px">
+      Pick a scenario, then <span class="kbd">Next</span> / <span class="kbd">Prev</span> or the
+      <span class="kbd">←</span> <span class="kbd">→</span> keys.</p>
+  </header>
+
+  <div class="narbr" id="narbr">
+    <span class="phase" id="phase">Ready</span>
+    <p id="narText">Press <strong>Next</strong> to begin.</p>
+  </div>
+
+  <div class="stage">
+    <div class="panel">
+      <div class="head"><span id="fileTag">program.js</span><span id="lineTag">—</span></div>
+      <div class="body codebox" id="code"></div>
+    </div>
+    <div class="panel">
+      <div class="head"><span>Call Stack · Contexts · Heap</span><span id="stackTag">0 frames</span></div>
+      <div class="body">
+        <div class="stack" id="stack"></div>
+        <div id="heapWrap"></div>
+        <div id="lookupWrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:2px">
+    <div class="head"><span>console</span><span>output</span></div>
+    <div class="console" id="console"><span class="empty">// nothing logged yet</span></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn ghost" id="prev">← Prev</button>
+    <button class="btn" id="next">Next →</button>
+    <button class="btn ghost" id="reset">⟲ Reset</button>
+    <span class="stepnum" id="stepnum">0 / 0</span>
+    <div class="track"><div class="fill" id="fill"></div></div>
+  </div>
+
+  <div class="card" style="margin-top:24px">
+    <div class="subhead" style="color:var(--text-mute)">Legend</div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;font-family:var(--font-mono);font-size:.8rem;color:var(--text-dim)">
+      <span><span class="var tdz" style="display:inline-flex;padding:2px 8px"><span class="vv">uninitialized</span></span>&nbsp; hoisted, in the <b style="color:var(--amber)">TDZ</b></span>
+      <span><span class="var set" style="display:inline-flex;padding:2px 8px"><span class="vv">"value"</span></span>&nbsp; assigned</span>
+      <span><span class="th">this</span>&nbsp; bound at call time</span>
+      <span style="color:var(--accent-2)">▨ HEAP</span>&nbsp; environment kept alive by a closure</span>
+      <span><b style="color:var(--green)">✓</b> found · <b style="color:var(--red)">✗</b> go outer</span>
+    </div>
+  </div>
+
+  <div class="footer" id="footer"></div>
+</div>
+
+<script>
+/* ============ helpers ============ */
+const tdz = n => ({ name: n, state: 'tdz', value: 'uninitialized' });
+const set = (n, v) => ({ name: n, state: 'set', value: v });
+const colorize = src => src
+  .replace(/(".*?")/g, '<span class="s">$1</span>')
+  .replace(/\b(const|let|var|function|return)\b/g, '<span class="k">$1</span>')
+  .replace(/\bthis\b/g, '<span class="th">this</span>')
+  .replace(/(\/\/.*)/g, '<span class="c">$1</span>');
+
+/* ============================================================
+   SCENARIO A — `this` (Lesson 15)
+   ============================================================ */
+const G_THIS = (v, n) => ({ name:'Global Execution Context', tag:'module scope',
+  thisLabel:'undefined  (module top-level)', env:[v, n], outer:null });
+const SPEAK = greeting => ({ name:'speak() Execution Context', tag:'function scope',
+  thisLabel:'→ naruto object', env:[greeting], outer:'Global' });
+
+const SCEN_THIS = {
+  id:'this', label:'this', sub:'Lesson 15', file:'this.js',
+  raw:[
+    'const village = "Leaf";',
+    '',
+    'const naruto = {',
+    '  name: "Naruto",',
+    '  speak() {',
+    '    const greeting = "I am";',
+    '    console.log(greeting, this.name, "from", village);',
+    '  }',
+    '};',
+    '',
+    'naruto.speak();',
+  ],
+  footer:'Watch the contrast: <span class="th">this</span> is set when <code>speak</code> is <em>called</em> (the call site), while <code>village</code> is found through the <em>outer</em> pointer fixed when <code>speak</code> was <em>created</em>.',
+  steps:[
+    { phase:'Creation phase', line:null,
+      text:'The engine builds the <b>Global Execution Context</b> and scans for declarations. <code>village</code> and <code>naruto</code> are <b>hoisted</b> but sit in the Temporal Dead Zone — declared, not yet assigned.',
+      stack:[ G_THIS(tdz('village'), tdz('naruto')) ], heap:[], console:[] },
+    { phase:'Execution · line 1', line:1,
+      text:'<code>const village = "Leaf"</code> runs. <code>village</code> leaves the TDZ and holds <code>"Leaf"</code>.',
+      stack:[ G_THIS(set('village','"Leaf"'), tdz('naruto')) ], heap:[], console:[] },
+    { phase:'Execution · line 3', line:3,
+      text:'The object literal is created; <code>naruto</code> is assigned a <b>reference</b> to it (carrying <code>name</code> and the method <code>speak</code>).',
+      stack:[ G_THIS(set('village','"Leaf"'), set('naruto','→ {object}')) ], heap:[], console:[] },
+    { phase:'Call · line 11', line:11,
+      text:'Engine sees the call form <b>naruto.speak()</b> — <code>object.method()</code>. A <b>new Execution Context</b> is pushed. Because of the dot, <span class="th">this</span> is bound to the object left of it: <b>naruto</b>. Its <b>outer</b> pointer is Global — fixed by where <code>speak</code> was written.',
+      stack:[ G_THIS(set('village','"Leaf"'), set('naruto','→ {object}')), SPEAK(tdz('greeting')) ], heap:[], console:[] },
+    { phase:'Execution · line 6', line:6,
+      text:'Inside <code>speak</code>: <code>const greeting = "I am"</code> assigns a <b>local</b> binding, living only in this context.',
+      stack:[ G_THIS(set('village','"Leaf"'), set('naruto','→ {object}')), SPEAK(set('greeting','"I am"')) ], heap:[], console:[] },
+    { phase:'Name resolution · line 7', line:7,
+      text:'Resolving names: <code>greeting</code> ✓ local. <code>this.name</code> → <span class="th">this</span> = <b>naruto</b> → <code>"Naruto"</code>. <code>village</code> ✗ not local → follow <b>outer</b> to Global ✓ <code>"Leaf"</code>. <b>That outward walk is the scope chain.</b>',
+      stack:[ G_THIS(set('village','"Leaf"'), set('naruto','→ {object}')), SPEAK(set('greeting','"I am"')) ], heap:[], console:[],
+      lookup:{ query:'resolve  village', hit:'village', trace:[
+        { where:'speak() env', result:false, note:'✗ not here' },
+        { where:'outer → Global env', result:true, note:'✓ "Leaf"' } ] } },
+    { phase:'Output · line 7', line:7,
+      text:'All names resolved — the log prints.',
+      stack:[ G_THIS(set('village','"Leaf"'), set('naruto','→ {object}')), SPEAK(set('greeting','"I am"')) ], heap:[], console:['I am Naruto from Leaf'] },
+    { phase:'Return · pop', line:11,
+      text:'<code>speak</code> finishes. Its context is <b>popped</b> and destroyed — <code>greeting</code> and its <span class="th">this</span> binding vanish. Control returns to Global.',
+      stack:[ G_THIS(set('village','"Leaf"'), set('naruto','→ {object}')) ], heap:[], console:['I am Naruto from Leaf'] },
+    { phase:'Done', line:null, done:true,
+      text:'Program ends. Notice <span class="th">this</span> only existed <em>while speak was on the stack</em>, and was decided by the call site. Scrub back and forth to feel it.',
+      stack:[ G_THIS(set('village','"Leaf"'), set('naruto','→ {object}')) ], heap:[], console:['I am Naruto from Leaf'] },
+  ],
+};
+
+/* ============================================================
+   SCENARIO B — Closures
+   ============================================================ */
+const G_CLO = (mk, counter) => ({ name:'Global Execution Context', tag:'module scope',
+  thisLabel:'undefined  (module top-level)', env:[mk, counter], outer:null });
+// makeCounter frame, count value var
+const MK = count => ({ name:'makeCounter() Execution Context', tag:'function scope',
+  thisLabel:'undefined', env:[count], outer:'Global' });
+// inc frame — no locals, outer points to the surviving heap env
+const INC = () => ({ name:'inc() Execution Context', tag:'function scope',
+  thisLabel:'undefined', env:[], outer:'makeCounter() env  ▨ (heap)', outerClosure:true });
+// the surviving environment on the heap
+const HEAP_ENV = countVal => ({ name:'makeCounter() environment', keptBy:'inc()', vars:[ set('count', countVal) ] });
+
+const SCEN_CLO = {
+  id:'closures', label:'Closures', sub:'preview', file:'closures.js',
+  raw:[
+    'function makeCounter() {',
+    '  let count = 0;',
+    '  return function inc() {',
+    '    count++;',
+    '    return count;',
+    '  };',
+    '}',
+    '',
+    'const counter = makeCounter();',
+    'console.log(counter());',
+    'console.log(counter());',
+  ],
+  footer:'The whole magic: at step 4 <code>makeCounter</code>\'s frame is <b>popped</b> — but its environment does <b>not</b> die, because <code>inc</code> still points at it. It moves to the <span style="color:var(--accent-2)">heap</span> and both later calls share it, so <code>count</code> accumulates.',
+  steps:[
+    { phase:'Creation phase', line:null,
+      text:'Global context built. The <b>function declaration</b> <code>makeCounter</code> is hoisted <em>fully</em> (usable now). <code>counter</code> is a <code>const</code> — hoisted but in the TDZ.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), tdz('counter')) ], heap:[], console:[] },
+    { phase:'Call · line 9', line:9,
+      text:'<code>makeCounter()</code> is invoked. A new Execution Context is pushed. Its environment declares <code>count</code> (TDZ for a blink), outer → Global.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), tdz('counter')), MK(tdz('count')) ], heap:[], console:[] },
+    { phase:'Execution · line 2', line:2,
+      text:'<code>let count = 0</code> assigns the local. This binding lives in <code>makeCounter</code>\'s environment.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), tdz('counter')), MK(set('count','0')) ], heap:[], console:[] },
+    { phase:'Closure captured · line 3', line:3,
+      text:'The inner function <code>inc</code> is created. It records a hidden link — <code>[[Environment]]</code> — to the <b>current</b> environment (the one holding <code>count</code>). <code>makeCounter</code> is about to <code>return</code> it.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), tdz('counter')), MK(set('count','0')) ], heap:[], console:[] },
+    { phase:'Return · pop (but env survives!)', line:9,
+      text:'<code>makeCounter</code> returns <code>inc</code>. Its Execution Context is <b>popped</b> off the stack — but its environment is <b>NOT destroyed</b>: <code>inc</code> still references it, so it moves to the <span style="color:var(--accent-2)">HEAP</span>. <code>counter</code> now holds <code>inc</code>, closed over that live <code>count</code>.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), set('counter','→ inc  ▨')) ], heap:[ HEAP_ENV('0') ], console:[] },
+    { phase:'Call · line 10', line:10,
+      text:'<code>counter()</code> runs — that\'s <code>inc</code>. A new context is pushed. It has <b>no local</b> <code>count</code>; its <b>outer</b> is the surviving <span style="color:var(--accent-2)">heap environment</span>. That link <em>is</em> the closure.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), set('counter','→ inc  ▨')), INC() ], heap:[ HEAP_ENV('0') ], console:[] },
+    { phase:'Name resolution · line 4', line:4,
+      text:'<code>count++</code> needs <code>count</code>. inc\'s env ✗ empty → follow <b>outer</b> into the <span style="color:var(--accent-2)">heap env</span> ✓ found <code>0</code>. Increment it to <b>1</b> — right there on the heap.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), set('counter','→ inc  ▨')), INC() ], heap:[ {...HEAP_ENV('1'), bump:'count'} ], console:[],
+      lookup:{ query:'resolve  count', hit:'count', trace:[
+        { where:'inc() env', result:false, note:'✗ empty' },
+        { where:'outer → heap env', result:true, note:'✓ 0 → 1' } ] } },
+    { phase:'Return · pop', line:5,
+      text:'<code>inc</code> returns <code>1</code>. Its context pops. The <span style="color:var(--accent-2)">heap environment stays</span> — <code>count</code> is now <code>1</code> and waiting for next time.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), set('counter','→ inc  ▨')) ], heap:[ HEAP_ENV('1') ], console:['1'] },
+    { phase:'Call · line 11', line:11,
+      text:'<code>counter()</code> again. New <code>inc</code> context — but its outer is the <b>same</b> <span style="color:var(--accent-2)">heap env</span>, still holding <code>count = 1</code>.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), set('counter','→ inc  ▨')), INC() ], heap:[ HEAP_ENV('1') ], console:['1'] },
+    { phase:'Name resolution · line 4', line:4,
+      text:'<code>count++</code> resolves via outer to the heap env again ✓ <code>1</code> → increments to <b>2</b>. The state persisted between calls.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), set('counter','→ inc  ▨')), INC() ], heap:[ {...HEAP_ENV('2'), bump:'count'} ], console:['1'],
+      lookup:{ query:'resolve  count', hit:'count', trace:[
+        { where:'inc() env', result:false, note:'✗ empty' },
+        { where:'outer → heap env', result:true, note:'✓ 1 → 2' } ] } },
+    { phase:'Return · pop', line:5,
+      text:'Returns <code>2</code>, context pops, logs <code>2</code>.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), set('counter','→ inc  ▨')) ], heap:[ HEAP_ENV('2') ], console:['1','2'] },
+    { phase:'Done', line:null, done:true,
+      text:'Because the environment <b>outlived its frame</b> on the heap, <code>count</code> accumulated: <code>1</code>, then <code>2</code>. That persistence is a closure. Compare with the <b>this</b> scenario, where popping a frame simply <em>destroyed</em> its variables.',
+      stack:[ G_CLO(set('makeCounter','→ ƒ'), set('counter','→ inc  ▨')) ], heap:[ HEAP_ENV('2') ], console:['1','2'] },
+  ],
+};
+
+const SCENARIOS = [SCEN_THIS, SCEN_CLO];
+
+/* ============ rendering ============ */
+const el = id => document.getElementById(id);
+let scen = SCENARIOS[0];
+let i = 0;
+
+function buildPicker(){
+  el('picker').innerHTML = SCENARIOS.map(s =>
+    `<button class="snip ${s.id===scen.id?'on':''}" data-id="${s.id}">${s.label}<span class="sub">${s.sub}</span></button>`
+  ).join('');
+  el('picker').querySelectorAll('.snip').forEach(b => b.onclick = () => selectScenario(b.dataset.id));
+}
+function buildCode(){
+  el('code').innerHTML = scen.raw.map((src,n) =>
+    `<div class="cline" data-line="${n+1}"><span class="ln">${n+1}</span><span>${colorize(src) || ' '}</span></div>`
+  ).join('');
+  el('fileTag').textContent = scen.file;
+}
+function selectScenario(id){
+  scen = SCENARIOS.find(s => s.id === id);
+  i = 0; buildPicker(); buildCode(); render();
+}
+
+function renderFrame(f, isActive){
+  const vars = f.env.map(v =>
+    `<div class="var ${v.state==='tdz'?'tdz':'set'}" data-var="${v.name}"><span class="vn">${v.name}</span><span class="vv">${v.value}</span></div>`
+  ).join('') || '<div class="var set"><span class="vn dim">(empty)</span></div>';
+  const outer = f.outer
+    ? `<div class="outer ${f.outerClosure?'closure':''}">outer → <b>${f.outer}</b> <span style="color:var(--text-mute)">${f.outerClosure?'(the closure link)':'(fixed at creation)'}</span></div>`
+    : `<div class="outer">outer → <b>null</b> <span style="color:var(--text-mute)">(top of the chain)</span></div>`;
+  return `<div class="frame ${isActive?'active':''}">
+    <div class="fhead"><span class="fname">${f.name}</span><span class="ftag">${f.tag}</span></div>
+    <div class="fbody">
+      <div class="thisrow"><span class="k">this</span><span class="v">${f.thisLabel}</span></div>
+      <div class="subhead">Lexical Environment</div>${vars}${outer}
+    </div></div>`;
+}
+function renderHeapEnv(h){
+  const vars = h.vars.map(v =>
+    `<div class="var set ${h.bump===v.name?'bump':''}" data-var="${v.name}"><span class="vn">${v.name}</span><span class="vv">${v.value}</span></div>`
+  ).join('');
+  return `<div class="henv">
+    <div class="hh"><span class="nm">${h.name}</span><span style="color:var(--text-mute);font-size:.7rem">on heap</span></div>
+    <div class="hbody">${vars}<div class="keptby">kept alive by → <b>${h.keptBy}</b>&nbsp;(closure)</div></div></div>`;
+}
+
+function render(){
+  const s = scen.steps[i];
+  el('phase').innerHTML = s.phase;
+  el('narText').innerHTML = s.text;
+
+  document.querySelectorAll('.cline').forEach(c => c.classList.remove('active'));
+  if (s.line){ const l = document.querySelector(`.cline[data-line="${s.line}"]`); if (l) l.classList.add('active'); el('lineTag').textContent='line '+s.line; }
+  else el('lineTag').textContent = s.done ? 'finished' : 'creation';
+
+  el('stack').innerHTML = s.stack.map((f,idx) => renderFrame(f, idx===s.stack.length-1)).join('');
+  el('stackTag').textContent = s.stack.length + (s.stack.length===1?' frame':' frames');
+
+  el('heapWrap').innerHTML = (s.heap && s.heap.length)
+    ? `<div class="heapwrap"><div class="heaphead">Heap · surviving closures</div>${s.heap.map(renderHeapEnv).join('')}</div>` : '';
+
+  el('lookupWrap').innerHTML = s.lookup
+    ? `<div class="lookup fade-in"><div class="q">🔎 ${s.lookup.query}</div>${s.lookup.trace.map(t=>`<div class="step"><span>${t.where}</span><span class="${t.result?'ok':'no'}">${t.note}</span></div>`).join('')}</div>` : '';
+  if (s.lookup && s.lookup.hit){
+    setTimeout(()=>{ const m = document.querySelector(`[data-var="${s.lookup.hit}"].set`); if (m) m.classList.add('hit'); }, 40);
+  }
+
+  const c = el('console');
+  c.innerHTML = s.console.length ? s.console.map(l=>`<div class="line">▸ ${l}</div>`).join('') : '<span class="empty">// nothing logged yet</span>';
+
+  el('footer').innerHTML = scen.footer;
+  el('prev').disabled = i===0;
+  el('next').disabled = i===scen.steps.length-1;
+  el('stepnum').textContent = `${i} / ${scen.steps.length-1}`;
+  el('fill').style.width = (i/(scen.steps.length-1)*100)+'%';
+}
+
+el('next').onclick  = () => { if (i < scen.steps.length-1){ i++; render(); } };
+el('prev').onclick  = () => { if (i > 0){ i--; render(); } };
+el('reset').onclick = () => { i = 0; render(); };
+document.addEventListener('keydown', e => {
+  if (e.key==='ArrowRight') el('next').click();
+  if (e.key==='ArrowLeft')  el('prev').click();
+});
+
+buildPicker(); buildCode(); render();
+</script>
+</body>
+</html>
